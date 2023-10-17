@@ -3,6 +3,11 @@ Uses
     System.SysUtils;
 Type
     IOPreference = (UseFile, UseStdIO);
+    IntersectionState = (DoNotIntersect, Intersect, Belong, Failure);
+    //В качестве Fail я определил ситуацию, когда две точки одного
+    //ребра совпадают.
+    ResultState = (Fail, Belonging, NotBelonging);
+    FilePreparationKind = (Reading, Writing);
     RealArr = Array Of Real;
 Const
     MAX_ABSCISSA = 10000;
@@ -11,6 +16,7 @@ Const
     MIN_ORDINATE = 0;
     MAX_SIDES_AM = 48;
     MIN_SIDES_AM = 2;
+    FLOAT_ADMISSION = 0.00000001;
 
 Function GoodInteger(MinLimit, MaxLimit, Num : Integer) : Boolean;
 Begin
@@ -29,7 +35,8 @@ Begin
     GoodIntegerWithBlame := Virtue;
 End;
 
-Function GetInteger(MinLimit, MaxLimit : Integer; Mes : String) : Integer;
+//Nail переводится как "забрать".
+Function NailInteger(MinLimit, MaxLimit : Integer; Mes : String) : Integer;
 Var
     //Virtue переводится как хорошее качество.
     IsCyclical, ErrorFlag, Virtue : Boolean;
@@ -57,7 +64,7 @@ Begin
         End;
         ErrorFlag := False;
     End;
-    GetInteger := Num;
+    NailInteger := Num;
 End;
 
 Function GoodReal(MinLimit, MaxLimit, Num : Real) : Boolean;
@@ -77,7 +84,8 @@ Begin
     GoodRealWithBlame := Virtue;
 End;
 
-Function GetReal(MinLimit, MaxLimit : Real; Mes : String) : Real;
+//Nail переводится как "забрать".
+Function NailReal(MinLimit, MaxLimit : Real; Mes : String) : Real;
 Var
     //Virtue переводится как хорошее качество.
     IsCyclical, ErrorFlag, Virtue : Boolean;
@@ -105,76 +113,125 @@ Begin
         End;
         ErrorFlag := False;
     End;
-    GetReal := Num;
+    NailReal := Num;
 End;
 
-Function GetString(Mes : String) : String;
+//Nail переводится как "забрать".
+Function NailString(Mes : String) : String;
 Var Return : String;
 Begin
     WriteLn(Mes);
     ReadLn(Return);
-    GetString := Return;
+    NailString := Return;
 End;
 
-Function GetUserIOPreference() : IOPreference;
+//Nail переводится как "забрать".
+Function NailUserIOPreference() : IOPreference;
 Const
     ANS_MAX = 2;
     ANS_MIN = -1;
 Var
     Response : Integer;
 Begin
-    GetUserIOPreference := IOPreference.UseFile;
-    Response := GetInteger(ANS_MIN, ANS_MAX, 'Select the mode of interface(0 - File, 1 - StdIO):');
+    NailUserIOPreference := IOPreference.UseFile;
+    Response := NailInteger(ANS_MIN, ANS_MAX, 'Select the mode of interface(0 - File, 1 - StdIO):');
     If Response = 1 Then
-        GetUserIOPreference := IOPreference.UseStdIO;
+        NailUserIOPreference := IOPreference.UseStdIO;
 End;
 
 Procedure StdInput(Var PointX, PointY : Real; Var Abscisses, Ordinates : RealArr);
 Var SidesAm, I : Integer;
 Begin
-    SidesAm := GetInteger(MIN_SIDES_AM, MAX_SIDES_AM, 'Enter the amount of sides(from 3 to 47):');
+    SidesAm := NailInteger(MIN_SIDES_AM, MAX_SIDES_AM, 'Enter the amount of sides(from 3 to 47):');
     SetLength(Abscisses, SidesAm);
     SetLength(Ordinates, SidesAm);
     For I := 0 To High(Ordinates) Do
     Begin
-        Abscisses[I] := GetReal(MIN_ABSCISSA, MAX_ABSCISSA, 'Enter a new abscissa(0-10000):');
-        Ordinates[I] := GetReal(MIN_ORDINATE, MAX_ORDINATE, 'Enter a new ordinate(0-10000):');
+        Abscisses[I] := NailReal(MIN_ABSCISSA, MAX_ABSCISSA, 'Enter a new abscissa(0-10000):');
+        Ordinates[I] := NailReal(MIN_ORDINATE, MAX_ORDINATE, 'Enter a new ordinate(0-10000):');
     End;
-    PointX := GetReal(MIN_ABSCISSA, MAX_ABSCISSA, 'Enter the abscissa of the point(0-10000):');
-    PointY := GetReal(MIN_ORDINATE, MAX_ORDINATE, 'Enter the ordinate of the point(0-10000):');
+    PointX := NailReal(MIN_ABSCISSA, MAX_ABSCISSA, 'Enter the abscissa of the point(0-10000):');
+    PointY := NailReal(MIN_ORDINATE, MAX_ORDINATE, 'Enter the ordinate of the point(0-10000):');
+End;
+
+Procedure ReadRealPair(Var SuccessFlag : Boolean; Var Input : TextFile; Var Val1, Val2 : Real);
+Begin
+    If SuccessFlag And Eoln(Input) Then
+    Begin
+        WriteLn('Bad input!');
+        SuccessFlag := False;
+    End;
+    If SuccessFlag Then
+    Begin
+        Try
+            Read(Input, Val1);
+        Except
+            SuccessFlag := False;
+            WriteLn('Cannot read a number...');
+        End;
+    End;
+    If SuccessFlag Then
+        SuccessFlag := GoodRealWithBlame(MIN_ABSCISSA, MAX_ABSCISSA, Val1);
+    If SuccessFlag And Eoln(Input) Then
+    Begin
+        WriteLn('Bad input!');
+        SuccessFlag := False;
+    End;
+    If SuccessFlag Then
+    Begin
+        Try
+            ReadLn(Input, Val2);
+        Except
+            SuccessFlag := False;
+            WriteLn('Cannot read a number...');
+        End;
+    End;
+    If SuccessFlag Then
+        SuccessFlag := GoodRealWithBlame(MIN_ORDINATE, MAX_ORDINATE, Val2);
+End;
+
+Procedure PrepareFile(Var TargetFile : TextFile; Var SuccessFlag, IsOpen : Boolean; Mode : FilePreparationKind);
+Var
+    Path : String;
+Begin
+    Path := NailString('Enter a path:');
+    If Copy(Path, (High(Path) - 3), 4) <> '.txt' Then
+    Begin
+        SuccessFlag := False;
+        WriteLn('You are only allowed to use .txt!!');
+    End;
+    If (Mode = FilePreparationKind.Reading) And (Not FileExists(Path)) Then
+    Begin
+        SuccessFlag := False;
+        WriteLn('This file does not exist!!');
+    End;
+    If SuccessFlag Then
+    Begin
+        AssignFile(TargetFile, Path);
+        If (Mode = FilePreparationKind.Reading) Then
+            Reset(TargetFile)
+        Else
+            Rewrite(TargetFile);
+        IsOpen := True;
+    End;
 End;
 
 Procedure FileInput(Var PointX, PointY : Real; Var Abscisses, Ordinates : RealArr);
 Var
     IsCyclical, SuccessFlag, IsOpen : Boolean;
-    Path : String;
     Input : TextFile;
     SidesAm, I : Integer;
 Begin
     IsCyclical := True;
-    IsOpen := False;
     While IsCyclical Do
     Begin
+        IsOpen := False;
         SuccessFlag := True;
-        Path := GetString('Enter a path:');
-        If Not FileExists(Path) Then
+        PrepareFile(Input, SuccessFlag, IsOpen, FilePreparationKind.Reading);
+        If SuccessFlag And Eoln(Input) Then
         Begin
+            WriteLn('Bad input!');
             SuccessFlag := False;
-            WriteLn('This file does not exist!!');
-        End;
-        If SuccessFlag Then
-        Begin
-            AssignFile(Input, Path);
-            Reset(Input);
-            IsOpen := True;
-        End;
-        If SuccessFlag Then
-        Begin
-            If Eoln(Input) Then
-            Begin
-                WriteLn('Bad input!');
-                SuccessFlag := False;
-            End;
         End;
         If SuccessFlag Then
         Begin
@@ -194,77 +251,11 @@ Begin
             I := 0;
             While SuccessFlag And (I < SidesAm) Do
             Begin
-                //Я расценил проверку на SuccessFlag здесь как избыточную.
-                If Eoln(Input) Then
-                Begin
-                    WriteLn('Bad input!');
-                    SuccessFlag := False;
-                End;
-                If SuccessFlag Then
-                Begin
-                    Try
-                        Read(Input, Abscisses[I]);
-                    Except
-                        SuccessFlag := False;
-                        WriteLn('Cannot read a number...');
-                    End;
-                End;
-                If SuccessFlag Then
-                    SuccessFlag := GoodRealWithBlame(MIN_ABSCISSA, MAX_ABSCISSA, Abscisses[I]);
-                If SuccessFlag Then
-                Begin
-                    If Eoln(Input) Then
-                    Begin
-                        WriteLn('Bad input!');
-                        SuccessFlag := False;
-                    End;
-                End;
-                If SuccessFlag Then
-                Begin
-                    Try
-                        ReadLn(Input, Ordinates[I]);
-                    Except
-                        SuccessFlag := False;
-                        WriteLn('Cannot read a number...');
-                    End;
-                End;
-                If SuccessFlag Then
-                    SuccessFlag := GoodRealWithBlame(MIN_ORDINATE, MAX_ORDINATE, Ordinates[I]);
+                ReadRealPair(SuccessFlag, Input, Abscisses[I], Ordinates[I]);
                 I := I + 1;
             End;
         End;
-        If SuccessFlag And Eoln(Input) Then
-        Begin
-            WriteLn('Bad input!');
-            SuccessFlag := False;
-        End;
-        If SuccessFlag Then
-        Begin
-            Try
-                Read(Input, PointX);
-            Except
-                SuccessFlag := False;
-                WriteLn('Cannot read a number...');
-            End;
-        End;
-        If SuccessFlag Then
-            SuccessFlag := GoodRealWithBlame(MIN_ABSCISSA, MAX_ABSCISSA, PointX);
-        If SuccessFlag And Eoln(Input) Then
-        Begin
-            WriteLn('Bad input!');
-            SuccessFlag := False;
-        End;
-        If SuccessFlag Then
-        Begin
-            Try
-                ReadLn(Input, PointY);
-            Except
-                SuccessFlag := False;
-                WriteLn('Cannot read a number...');
-            End;
-        End;
-        If SuccessFlag Then
-            SuccessFlag := GoodRealWithBlame(MIN_ORDINATE, MAX_ORDINATE, PointY);
+        ReadRealPair(SuccessFlag, Input, PointX, PointY);
         If SuccessFlag Then
             IsCyclical := False;
         If IsOpen Then
@@ -273,9 +264,10 @@ Begin
 End;
 
 Procedure LoadData(Var PointX, PointY : Real; Var Abscisses, Ordinates : RealArr);
-Var Preference : IOPreference;
+Var
+    Preference : IOPreference;
 Begin
-    Preference := GetUserIOPreference();
+    Preference := NailUserIOPreference();
     If (Preference = IOPreference.UseStdIO) Then
         StdInput(PointX, PointY, Abscisses, Ordinates)
     Else
@@ -288,12 +280,160 @@ Begin
     End;
 End;
 
+Procedure SortPair(Var Biggest, Smallest : Real; Const Val1, Val2 : Real);
+Begin
+    If Val1 - Val2 > FLOAT_ADMISSION Then
+    Begin
+        Biggest := Val1;
+        Smallest := Val2;
+    End
+    Else
+    Begin
+        Biggest := Val2;
+        Smallest := Val1;
+    End;
+End;
+
+Function CheckIntersection(Const PointX, PointY, FirstAbscissa, FirstOrdinate, SecondAbscissa, SecondOrdinate : Real) : IntersectionState;
+Var
+    BigY, SmallY, BigX, SmallX : Real;//Отсортированные концы отрезка.
+    IntersectionX : Real;
+Begin
+    CheckIntersection := IntersectionState.DoNotIntersect;
+    If (Abs(FirstAbscissa - SecondAbscissa) < FLOAT_ADMISSION) And (Abs(FirstOrdinate - SecondOrdinate) < FLOAT_ADMISSION) Then
+        //Отрезок не существует.
+        CheckIntersection := IntersectionState.Failure
+    Else
+    Begin
+        SortPair(BigX, SmallX, FirstAbscissa, SecondAbscissa);
+        SortPair(BigY, SmallY, FirstOrdinate, SecondOrdinate);
+        If BigY - SmallY > FLOAT_ADMISSION Then
+        Begin
+            IntersectionX := SecondAbscissa + (PointY - SecondOrdinate) * (SecondAbscissa - FirstAbscissa) / (SecondOrdinate - FirstOrdinate);
+            If IntersectionX - PointX > FLOAT_ADMISSION Then
+            Begin
+                CheckIntersection := IntersectionState.Intersect;
+                If Abs(PointX - IntersectionX) < FLOAT_ADMISSION Then
+                    CheckIntersection := IntersectionState.Belong;
+            End;
+        End
+        Else
+        Begin
+            If (Abs(PointY - SecondOrdinate) < FLOAT_ADMISSION) And (PointX - SmallX > -FLOAT_ADMISSION) And (BigX - PointX > -FLOAT_ADMISSION) Then
+                CheckIntersection := IntersectionState.Belong;
+        End;
+    End;
+End;
+
+//Принцип работы - пуск луча вправо из заданной точки.
+//Нечётное число пересечений с рёбрами - вхождение.
+//Дополнительно проверяется принадлежность точки ребру.
+Function Solve(Const PointX, PointY : Real; Const Abscisses, Ordinates : RealArr) : ResultState;
+Var
+    I, Intersections : Integer;
+    NotBelongToLine, IsNotFailure : Boolean;
+    CheckResult : IntersectionState;
+Begin
+    I := 0;
+    Intersections := 0;
+    NotBelongToLine := True;
+    IsNotFailure := True;
+    While (I < Length(Abscisses)) And NotBelongToLine And IsNotFailure Do
+    Begin
+        If I < High(Abscisses) Then
+            CheckResult := CheckIntersection(PointX, PointY, Abscisses[I], Ordinates[I], Abscisses[I + 1], Ordinates[I + 1])
+        Else
+            CheckResult := CheckIntersection(PointX, PointY, Abscisses[I], Ordinates[I], Abscisses[0], Ordinates[0]);
+        Case CheckResult Of
+            IntersectionState.Belong:
+                NotBelongToLine := False;
+            IntersectionState.Intersect:
+                Intersections := Intersections + 1;
+            IntersectionState.Failure:
+                //Такой вариант возможен, если отрезок не существует.
+                IsNotFailure := False;
+        End;
+        I := I + 1;
+    End;
+    WriteLn(Intersections, ' intersections found.');
+    Solve := ResultState.Fail;
+    If IsNotFailure Then
+    Begin
+        If Not NotBelongToLine Then
+            Solve := ResultState.Belonging
+        Else
+        Begin
+            If Intersections Mod 2 = 1 Then
+                Solve := ResultState.Belonging
+            Else
+                Solve := ResultState.NotBelonging;
+        End;
+    End;
+End;
+
+Procedure StdOutput(Const Output : ResultState);
+Begin
+    Case Output Of
+        ResultState.Fail:
+            WriteLn('The figure does not exist!!');
+        ResultState.Belonging:
+            WriteLn('The point lies inside the polygon.');
+        ResultState.NotBelonging:
+            WriteLn('The point does not lie inside the polygon.');
+    End;
+End;
+
+Procedure FileOutput(Const Output : ResultState);
+Var
+    IsCyclical, SuccessFlag, IsOpen : Boolean;
+    OutputFile : TextFile;
+Begin
+    IsCyclical := True;
+    While IsCyclical Do
+    Begin
+        SuccessFlag := True;
+        IsOpen := False;
+        PrepareFile(OutputFile, SuccessFlag, IsOpen, FilePreparationKind.Writing);
+        If SuccessFlag Then
+        Begin
+            Case Output Of
+                ResultState.Fail:
+                    WriteLn(OutputFile, 'The figure does not exist!!');
+                ResultState.Belonging:
+                    WriteLn(OutputFile, 'The point lies inside the polygon.');
+                ResultState.NotBelonging:
+                    WriteLn(OutputFile, 'The point does not lie inside the polygon.');
+            End;
+        End;
+        If SuccessFlag Then
+            IsCyclical := False;
+        If IsOpen Then
+            CloseFile(Input);
+    End;
+End;
+
+Procedure UnloadData(Const Output : ResultState);
+Var
+    Preference : IOPreference;
+Begin
+    Preference := NailUserIOPreference();
+    If (Preference = IOPreference.UseStdIO) Then
+        StdOutput(Output)
+    Else
+        FileOutput(Output);
+End;
+
 Var
     PointX, PointY : Real;
     Abscisses, Ordinates : RealArr;
+    Output : ResultState;
 Begin
     WriteLn(' This program finds out if a point lies inside a polygon.');
     WriteLn('Loading data...');
     LoadData(PointX, PointY, Abscisses, Ordinates);
+    WriteLn('Solving the problem...');
+    Output := Solve(PointX, PointY, Abscisses, Ordinates);
+    WriteLn('Returning the result...');
+    UnloadData(Output);
     ReadLn;
 End.
