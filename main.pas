@@ -7,7 +7,6 @@ Type
     //В качестве Fail я определил ситуацию, когда две точки одного
     //ребра совпадают.
     ResultState = (Fail, Belonging, NotBelonging);
-    FilePreparationKind = (Reading, Writing);
     RealArr = Array Of Real;
 Const
     MAX_ABSCISSA = 10000;
@@ -17,6 +16,8 @@ Const
     MAX_SIDES_AM = 48;
     MIN_SIDES_AM = 2;
     FLOAT_ADMISSION = 0.00000001;
+    ANS_MAX = 2;
+    ANS_MIN = -1;
 
 Function GoodInteger(MinLimit, MaxLimit, Num : Integer) : Boolean;
 Begin
@@ -69,7 +70,10 @@ End;
 
 Function GoodReal(MinLimit, MaxLimit, Num : Real) : Boolean;
 Begin
-    GoodReal := ((Num > MinLimit) And (Num < MaxLimit));
+    //Минус перед поправкой учитывает возможное "заступание" Num за лимиты
+    //вследствие воздействия побочных чисел и случай равенства Num с одним
+    //из лимитов.
+    GoodReal := ((Num - MinLimit > -FLOAT_ADMISSION) And (-FLOAT_ADMISSION < MaxLimit - Num));
 End;
 
 //Blame переводится как порицание.
@@ -127,9 +131,6 @@ End;
 
 //Nail переводится как "забрать".
 Function NailUserIOPreference() : IOPreference;
-Const
-    ANS_MAX = 2;
-    ANS_MIN = -1;
 Var
     Response : Integer;
 Begin
@@ -190,7 +191,7 @@ Begin
         SuccessFlag := GoodRealWithBlame(MIN_ORDINATE, MAX_ORDINATE, Val2);
 End;
 
-Procedure PrepareFile(Var TargetFile : TextFile; Var SuccessFlag, IsOpen : Boolean; Mode : FilePreparationKind);
+Procedure PrepareFileForReading(Var TargetFile : TextFile; Var SuccessFlag, IsOpen : Boolean);
 Var
     Path : String;
 Begin
@@ -200,7 +201,7 @@ Begin
         SuccessFlag := False;
         WriteLn('You are only allowed to use .txt!!');
     End;
-    If (Mode = FilePreparationKind.Reading) And (Not FileExists(Path)) Then
+    If SuccessFlag And (Not FileExists(Path)) Then
     Begin
         SuccessFlag := False;
         WriteLn('This file does not exist!!');
@@ -208,11 +209,31 @@ Begin
     If SuccessFlag Then
     Begin
         AssignFile(TargetFile, Path);
-        If (Mode = FilePreparationKind.Reading) Then
-            Reset(TargetFile)
-        Else
-            Rewrite(TargetFile);
+        Reset(TargetFile);
         IsOpen := True;
+    End;
+End;
+
+Procedure PrepareFileForWriting(Var TargetFile : TextFile; Var SuccessFlag, IsOpen : Boolean);
+Var
+    Path : String;
+Begin
+    Path := NailString('Enter a path:');
+    If Copy(Path, (High(Path) - 3), 4) <> '.txt' Then
+    Begin
+        SuccessFlag := False;
+        WriteLn('You are only allowed to use .txt!!');
+    End;
+    If SuccessFlag Then
+    Begin
+        AssignFile(TargetFile, Path);
+        IsOpen := True;
+        Try
+            Rewrite(TargetFile);
+        Except
+            WriteLn('Writing is impossible!!');
+            SuccessFlag := False;
+        End;
     End;
 End;
 
@@ -227,7 +248,7 @@ Begin
     Begin
         IsOpen := False;
         SuccessFlag := True;
-        PrepareFile(Input, SuccessFlag, IsOpen, FilePreparationKind.Reading);
+        PrepareFileForReading(Input, SuccessFlag, IsOpen);
         If SuccessFlag And Eoln(Input) Then
         Begin
             WriteLn('Bad input!');
@@ -298,6 +319,7 @@ Function CheckIntersection(Const PointX, PointY, FirstAbscissa, FirstOrdinate, S
 Var
     BigY, SmallY, BigX, SmallX : Real;//Отсортированные концы отрезка.
     IntersectionX : Real;
+    Virtue : Boolean;
 Begin
     CheckIntersection := IntersectionState.DoNotIntersect;
     If (Abs(FirstAbscissa - SecondAbscissa) < FLOAT_ADMISSION) And (Abs(FirstOrdinate - SecondOrdinate) < FLOAT_ADMISSION) Then
@@ -319,7 +341,8 @@ Begin
         End
         Else
         Begin
-            If (Abs(PointY - SecondOrdinate) < FLOAT_ADMISSION) And (PointX - SmallX > -FLOAT_ADMISSION) And (BigX - PointX > -FLOAT_ADMISSION) Then
+            Virtue := GoodReal(SmallX, BigX, PointX);
+            If (Abs(PointY - SecondOrdinate) < FLOAT_ADMISSION) And Virtue Then
                 CheckIntersection := IntersectionState.Belong;
         End;
     End;
@@ -393,7 +416,7 @@ Begin
     Begin
         SuccessFlag := True;
         IsOpen := False;
-        PrepareFile(OutputFile, SuccessFlag, IsOpen, FilePreparationKind.Writing);
+        PrepareFileForWriting(OutputFile, SuccessFlag, IsOpen);
         If SuccessFlag Then
         Begin
             Case Output Of
