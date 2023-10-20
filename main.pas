@@ -155,13 +155,18 @@ Begin
     PointY := NailReal(MIN_ORDINATE, MAX_ORDINATE, 'Enter the ordinate of the point(0-10000):');
 End;
 
-Procedure ReadRealPair(Var SuccessFlag : Boolean; Var Input : TextFile; Var Val1, Val2 : Real);
+Procedure checkEOLn(Var Input : TextFile; Var SuccessFlag : Boolean);
 Begin
     If SuccessFlag And Eoln(Input) Then
     Begin
         WriteLn('Bad input!');
         SuccessFlag := False;
     End;
+End;
+
+Procedure ReadRealPair(Var SuccessFlag : Boolean; Var Input : TextFile; Var Val1, Val2 : Real);
+Begin
+    checkEOLn(Input, SuccessFlag);
     If SuccessFlag Then
     Begin
         Try
@@ -173,11 +178,7 @@ Begin
     End;
     If SuccessFlag Then
         SuccessFlag := GoodRealWithBlame(MIN_ABSCISSA, MAX_ABSCISSA, Val1);
-    If SuccessFlag And Eoln(Input) Then
-    Begin
-        WriteLn('Bad input!');
-        SuccessFlag := False;
-    End;
+    checkEOLn(Input, SuccessFlag);
     If SuccessFlag Then
     Begin
         Try
@@ -237,6 +238,22 @@ Begin
     End;
 End;
 
+Procedure ReadInt(Var SuccessFlag : Boolean; Var Input : TextFile; Var Num : Integer);
+Begin
+    checkEOLn(Input, SuccessFlag);
+    If SuccessFlag Then
+    Begin
+        Try
+            ReadLn(Input, Num);
+        Except
+            SuccessFlag := False;
+            WriteLn('Cannot read a number...');
+        End;
+    End;
+    If SuccessFlag Then
+        SuccessFlag := GoodIntegerWithBlame(MIN_SIDES_AM, MAX_SIDES_AM, Num);
+End;
+
 Procedure FileInput(Var PointX, PointY : Real; Var Abscisses, Ordinates : RealArr);
 Var
     IsCyclical, SuccessFlag, IsOpen : Boolean;
@@ -249,22 +266,7 @@ Begin
         IsOpen := False;
         SuccessFlag := True;
         PrepareFileForReading(Input, SuccessFlag, IsOpen);
-        If SuccessFlag And Eoln(Input) Then
-        Begin
-            WriteLn('Bad input!');
-            SuccessFlag := False;
-        End;
-        If SuccessFlag Then
-        Begin
-            Try
-                ReadLn(Input, SidesAm);
-            Except
-                SuccessFlag := False;
-                WriteLn('Cannot read a number...');
-            End;
-        End;
-        If SuccessFlag Then
-            SuccessFlag := GoodIntegerWithBlame(MIN_SIDES_AM, MAX_SIDES_AM, SidesAm);
+        ReadInt(SuccessFlag, Input, SidesAm);
         If SuccessFlag Then
         Begin
             SetLength(Abscisses, SidesAm);
@@ -303,7 +305,7 @@ End;
 
 Procedure SortPair(Var Biggest, Smallest : Real; Const Val1, Val2 : Real);
 Begin
-    If Val1 - Val2 > FLOAT_ADMISSION Then
+    If Val1 > Val2 Then
     Begin
         Biggest := Val1;
         Smallest := Val2;
